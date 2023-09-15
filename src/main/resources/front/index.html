@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- 引入样式 -->
+  <link rel="stylesheet" href="plugins/element-ui/index.css" />
+  <link rel="stylesheet" href="styles/common.css" />
+  <link rel="stylesheet" href="styles/index.css" />
+  <link rel="stylesheet" href="styles/icon/iconfont.css" />
+  <title>GNN4Route</title>
+  <style>
+    #container {
+      margin-left: 18%;
+      width: 82%;
+      height: 100%;
+      position: absolute;
+    }
+    body{
+      overflow: hidden;
+    }
+    .amap-marker{
+      white-space: nowrap;
+    }
+    .button, .input, .label{
+      left: 0;
+      right: 0;
+      bottom: 0;
+      top: 0;
+      margin: 1% auto;
+    }
+    .page{
+      border: #7093c5 1.2px solid;
+      width: 18%;
+      padding: 0;
+      position: absolute;
+      background-color: #f9fcff;
+    }
+    .button{
+      margin-left: 19%;
+      margin-top: 4%;
+      width: 40%;
+      border: 2px solid rgb(140, 214, 231);
+      transition: 0.2s ease-in-out;
+    }
+    .button:hover{
+      filter: drop-shadow(0px 0px 5px rgba(45, 107, 107, 0.7)) brightness(1.05);
+    }
+    .button:active{
+      filter: drop-shadow(0px 0px 5px rgba(216, 189, 224, 0.5)) brightness(1.0);
+    }
+    .label{
+      margin-top: 7%;
+    }
+    .input{
+      margin-top: 7%;
+    }
+    .items{
+      position: absolute;
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+    }
+    .itemL,.itemD{
+      position: relative;
+      width: 100%;
+      height: 70px;
+      line-height: 70px;
+      border-top: #7093c5 1.5px solid;
+      font-size: 17px;
+      padding-left: 40px;
+    }
+    .itemL{
+      background-color: #ecf3ff;
+    }
+    .itemD{
+      background-color: #a1cfff;
+    }
+  </style>
+</head>
+<body>
+<div class="page" id="app" style="left: 0;right: 0;top: 0;bottom: 0;z-index: 5">
+  <div>
+    <el-form
+            ref="hostForm"
+            :model="hostForm"
+            :rules="rules"
+            :inline="false"
+    >
+      <el-form-item
+              prop="host"
+              class="label"
+      >
+        <el-input
+                v-model="hostForm.host"
+                placeholder="请输入URL"
+                minlength="1"
+                class="input"
+        />
+      </el-form-item>
+
+      <div class="subBox">
+        <el-form-item>
+          <el-button
+                  class="button"
+                  type="primary"
+                  @click="submitForm('hostForm')"
+                  style="z-index: 60"
+          >
+            监听
+          </el-button>
+        </el-form-item>
+        <div style="font-size: 16px; text-align: center;width: 100%;left: 0;right: 0;top: 0;bottom: 0;margin: 2% auto">
+          在需要监听的部分按下空格以更新IP列表
+        </div>
+      </div>
+    </el-form>
+    <el-select
+            v-model="dataForm.ipv4"
+            filterable
+            default-first-option
+            @change="LocateByIP"
+            style="left: 0;right: 0;top: 0;bottom: 0;margin: 6% auto;width: 100%"
+            placeholder="请选择要预测的选项">
+      <el-option
+              v-for="item in options"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value">
+              <span style="float: left">{{ item.label }}</span>
+              <span style="float: right; color: #8492a6; font-size: 13px">{{ item.value }}</span>
+      </el-option>
+    </el-select>
+
+    <el-form
+            ref="hostForm"
+            :model="hostForm"
+            :rules="rules"
+            :inline="false"
+    >
+
+      <div class="subBox">
+        <el-form-item>
+          <el-button
+                  class="button"
+                  type="primary"
+                  @click="secJudge(hostForm)"
+                  style="z-index: 60"
+          >
+            检测网址安全性
+          </el-button>
+        </el-form-item>
+      </div>
+    </el-form>
+    <div class="items">
+      <div class="itemL">监听IP: {{dataForm.ipv4}}</div>
+      <div class="itemD">地  址: {{dataForm.country}} {{dataForm.city}} {{dataForm.prov}} {{dataForm.district}}</div>
+      <div class="itemL">运营商: {{dataForm.isp}}</div>
+      <div class="itemD">邮  编: {{dataForm.zipcode}}</div>
+      <div class="itemL">所属机构: {{dataForm.owner}}</div>
+      <div class="itemD">经度: {{dataForm.lng}}°</div>
+      <div class="itemL" style="border-bottom: #7093c5 1.5px solid;">纬度: {{dataForm.lat}}°</div>
+      <div class="itemD" style="display: none">详细地址:{{dataForm.address}}</div>
+    </div>
+  </div>
+</div>
+<div id="container"></div>
+<!-- 开发环境版本，包含了有帮助的命令行警告 -->
+<script src="plugins/vue/vue.js"></script>
+<!-- 引入组件库 -->
+<script src="plugins/element-ui/index.js"></script>
+<!-- 引入axios -->
+<script src="plugins/axios/axios.min.js"></script>
+<script src="js/request.js"></script>
+<script src="api/geo.js"></script>
+<script src="api/monitor.js"></script>
+<script src="js/validate.js"></script>
+<script src="js/index.js"></script>
+<script src="./js/maps.js"></script>
+<script>
+  new Vue({
+    el: '#app',
+    data() {
+      return {
+        judge_flag: true,
+        mapData:{
+          map:null,
+          circle : null,
+          marker : null,
+          text1 : null,
+          text2 : null,
+          line : null,
+          textR : null,
+        },
+        hostForm:{
+          host:"",
+        },
+        judge_response : "",
+        listened: null,
+        options: [],
+        dataForm:{
+          ipv4:"",
+          address:"",
+          lat:"",
+          lng:"",
+          radius:"",
+          prov:"",
+          city:"",
+          district:"",
+          continent:"",
+          country:"",
+          consistency:"",
+          correctness:"",
+          owner:"",
+          isp:"",
+          zipcode:"",
+          timezone:"",
+          accuracy:"",
+          source:"",
+          areaCode:"",
+          asNumber:"",
+        }
+      }
+    },
+    computed: {
+      rules () {
+        return {
+          'ipv4': [{ 'required': true, 'validator': checkIpv4, 'trigger': 'blur' }],
+          'host': [{ 'required': true, 'validator': checkURL, 'trigger': 'blur' }],
+        }
+      }
+    },
+    created() {
+      this.mapData.map = new AMap.Map('container', {
+        viewMode: '2D', // 默认使用 2D 模式，如果希望使用带有俯仰角的 3D 模式，请设置 viewMode: '3D'
+        zoom:11, // 初始化地图层级
+        center: [116.397428, 39.90923] // 初始化地图中心点
+      });
+      setInterval(()=>{
+          this.ListenDiff();
+      },250)
+    },
+    mounted() {
+    },
+    methods: {
+      LocateByIP (val) {
+        this.judge_flag = false
+        this.dataForm.ipv4 = val
+        const params = {
+          ipv4: val
+        }
+        getIpData(params).then(res => {
+          if (res.code === 1) {
+            this.dataForm = res.data
+            this.judge_flag = true
+            this.setFocus(parseFloat(this.dataForm.lng), parseFloat(this.dataForm.lat), parseFloat(this.dataForm.radius))
+          } else {
+            this.judge_flag = true
+            this.$message.error(res.msg || '出错')
+          }
+        }).catch(err => {
+          this.judge_flag = true
+          this.$message.error('请求错误：' + err)
+        })
+      },
+      secJudge (inputForm) {
+        if(this.judge_flag === false) return;
+        this.judge_flag = false
+        //console.log(inputForm)
+        if(inputForm.host === "") {
+          this.$message('无法检测');
+          return
+        }
+        let ipv4J = this.dataForm.ipv4
+        let id_jud
+        for (let i = 0; i < this.options.length; i++) {
+          //console.log(this.options[i].label)
+          //console.log(inputForm.host)
+          if(this.options[i].value === ipv4J) {
+            id_jud = this.options[i].id
+            break
+          }
+        }
+        const params = {
+          id: id_jud,
+          isp: this.dataForm.isp,
+          lct: this.dataForm.country + this.dataForm.city + this.dataForm.prov + this.dataForm.district
+        }
+        securityJudge(params).then(res => {
+          this.judge_flag = true
+          if (res.code === 1) {
+            if(res.data === 'N') {
+              this.$message('无法检测');
+              return
+            }
+            else {
+              this.judge_response = res.data
+              let val1 = this.judge_response.indexOf("不危险")==-1?false:true
+              let val2 = this.judge_response.indexOf("是安全的")==-1?false:true
+              if(val1 || val2) {
+                this.$notify({
+                  title: '检测结果:',
+                  message: this.judge_response,
+                  duration: 0,
+                  type: 'success'
+                });
+              } else {
+                this.$notify.error({
+                  title: '检测结果!',
+                  message: this.judge_response,
+                  duration: 0
+                });
+              }
+            }
+          } else {
+            this.$message.error(res.msg || '出错')
+          }
+        }).catch(err => {
+          this.judge_flag = true
+          this.$message.error('请求错误：' + err)
+        })
+      },
+      ListenDiff () {
+        infoMonitor(null).then(res => {
+          if (res.code === 1) {
+            if(res.data === 'N') return
+            else if (res.data !== this.listened) {
+              this.$message.success(res.msg || '列表已更新')
+              this.listened = res.data
+              this.options = []
+              for (let i = 0; i < this.listened.ips.length; i++) {
+                if(this.listened.ips[i] === '127.0.0.1') continue
+                item = {label : this.listened.hosts[i] , value : this.listened.ips[i] , id: this.listened.ids[i]}
+                this.options.push(item)
+              }
+            }
+          } else {
+            this.$message.error(res.msg || '出错')
+          }
+        }).catch(err => {
+          this.$message.error('请求错误：' + err)
+        })
+      },/*
+      submitForm (formName) {
+        this.$refs[formName].validate((valid) => {
+          if (valid) {
+            const params = {
+              ipv4: this.dataForm.ipv4
+            }
+            getIpData(params).then(res => {
+              if (res.code === 1) {
+                this.dataForm = res.data
+                this.setFocus(parseFloat(this.dataForm.lng), parseFloat(this.dataForm.lat), parseFloat(this.dataForm.radius))
+              } else {
+                this.$message.error(res.msg || '出错')
+              }
+            }).catch(err => {
+              this.$message.error('请求错误：' + err)
+            })
+          } else {
+            console.log('提交错误')
+            return false
+          }
+        })
+      },*/
+      submitForm (hostForm) {
+        this.$refs[hostForm].validate((valid) => {
+          if (valid) {
+            let replacedUrl = this.hostForm.host.replace(/\//g, '&slash;');
+            const params = {
+              url: replacedUrl
+            }
+            startMonitor(params).then(res => {
+              if (res.code === 1) {
+                this.$message.success(res.msg || '成功监听')
+              } else {
+                this.$message.error(res.msg || '出错')
+              }
+            }).catch(err => {
+              this.$message.error('请求错误：' + err)
+            })
+          } else {
+            console.log('提交错误')
+            return false
+          }
+        })
+      },
+      setFocus(lng, lat, radius) {
+        this.drawCircle(lng, lat, radius)
+        this.setText(lng, lat, radius)
+        this.addMarker(lng, lat)
+        this.mapData.map.setCenter([lng, lat]); //设置地图中心点
+        //console.log("GIS当前中心点已设为:" + lng.toFixed(6) + lat.toFixed(6));
+      },
+      drawCircle(lng, lat, radius) {
+        if(this.mapData.circle !== null) {
+          this.mapData.map.remove(this.mapData.circle)
+          this.mapData.circle = null
+        }
+
+        this.mapData.circle = new AMap.Circle({
+          center: [lng, lat],
+          radius: radius, //半径
+          borderWeight: 3,
+          strokeColor: "#FF3333",
+          strokeOpacity: 1,
+          strokeWeight: 6,
+          strokeOpacity: 1,
+          fillOpacity: 0.0,
+          strokeStyle: 'dashed',
+          strokeDasharray: [30, 10],
+          // 线样式还支持 'dashed'
+          fillColor: '#1791fc',
+          lineJoin: 'round',
+          lineCap: 'round',
+          zIndex: 50,
+        })
+
+        this.mapData.map.add(this.mapData.circle);
+        // 缩放地图到合适的视野级别
+        this.mapData.map.setFitView([ this.mapData.circle ])
+        /*
+                var circleEditor = new AMap.CircleEditor(map, circle)
+
+                circleEditor.on('move', function(event) {
+                    log.info('触发事件：move')
+                })
+
+                circleEditor.on('adjust', function(event) {
+                    log.info('触发事件：adjust')
+                })
+
+                circleEditor.on('end', function(event) {
+                    log.info('触发事件： end')
+                    // event.target 即为编辑后的圆形对象
+                })*/
+      },
+      // 实例化点标记
+      addMarker(lng, lat) {
+        if(this.mapData.marker !== null) {
+          this.mapData.marker.setMap(null);
+          this.mapData.marker = null;
+        }
+        this.mapData.marker = new AMap.Marker({
+          icon: "./images/poi-marker-red.png",
+          position: [lng, lat],
+          offset: new AMap.Pixel(-13, -30)
+        });
+        this.mapData.marker.setMap(this.mapData.map);
+      },
+
+      updateContent() {
+        if (!this.mapData.marker) {
+          return;
+        }
+
+        // 自定义点标记内容
+        let markerContent = document.createElement("div");
+
+        // 点标记中的图标
+        let markerImg = document.createElement("img");
+        markerImg.className = "markerlnglat";
+        markerImg.src = "//a.amap.com/jsapi_demos/static/demo-center/icons/poi-marker-red.png";
+        markerImg.setAttribute('width', '25px');
+        markerImg.setAttribute('height', '34px');
+        markerContent.appendChild(markerImg);
+
+        // 点标记中的文本
+        let markerSpan = document.createElement("span");
+        markerSpan.className = 'marker';
+        markerSpan.innerHTML = "Hi，我被更新啦！";
+        markerContent.appendChild(markerSpan);
+
+        this.mapData.marker.setContent(markerContent); //更新点标记内容
+        this.mapData.marker.setPosition([116.391467, 39.927761]); //更新点标记位置
+      },
+
+      setText(lng, lat, radius) {
+        if(this.mapData.text1) {
+          this.mapData.text1.setMap(null);
+          this.mapData.text1 = null;
+        }
+        // 创建纯文本标记
+        this.mapData.text1 = new AMap.Text({
+          text:"经度:"+lng.toFixed(4)+"°",
+          anchor:'center', // 设置文本标记锚点
+          draggable:false,
+          cursor:'pointer',
+          style:{
+            'padding': '.75rem 1.25rem',
+            'margin-top': '15rem',
+            'border-radius': '1rem',
+            'background-color': 'rgba(255,255,255,0.9)',
+            'width': '12rem',
+            'height': '7.6rem',
+            'border-width': 0,
+            'box-shadow': '0 2px 6px 0 rgba(255, 90, 90, .5)',
+            'text-align': 'left',
+            'font-size': '15px',
+            'color': 'rgba(255, 90, 90, 1)'
+          },
+          position: [lng, lat]
+        });
+
+        this.mapData.text1.setMap(this.mapData.map);
+
+        if(this.mapData.text2) {
+          this.mapData.text2.setMap(null);
+          this.mapData.text2 = null;
+        }
+        // 创建纯文本标记
+        this.mapData.text2 = new AMap.Text({
+          text:"纬度:"+lat.toFixed(4)+"°",
+          anchor:'center', // 设置文本标记锚点
+          draggable:false,
+          cursor:'pointer',
+          style:{
+            'padding': '.75rem 1.25rem',
+            'margin-top': '17.8rem',
+            'border-radius': '1rem',
+            'background-color': 'rgba(255,255,255,0)',
+            'width': '12rem',
+            'height': '6rem',
+            'border-width': 0,
+            'box-shadow': '0 2px 6px 0 rgba(255, 90, 90, 0)',
+            'text-align': 'left',
+            'font-size': '15px',
+            'color': 'rgba(255, 90, 90, 1)'
+          },
+          position: [lng, lat]
+        });
+
+        this.mapData.text2.setMap(this.mapData.map);
+
+        if(this.mapData.textR) {
+          this.mapData.textR.setMap(null);
+          this.mapData.textR = null;
+        }
+        // 创建纯文本标记
+        this.mapData.textR = new AMap.Text({
+          text:"半径:"+radius.toFixed(2)+"m",
+          anchor:'center', // 设置文本标记锚点
+          draggable:false,
+          cursor:'pointer',
+          style:{
+            'padding': '.75rem 1.25rem',
+            'margin-top': '21.7rem',
+            'border-radius': '1rem',
+            'background-color': 'rgba(255,255,255,0)',
+            'width': '12rem',
+            'height': '6rem',
+            'border-width': 0,
+            'box-shadow': '0 2px 6px 0 rgba(255, 90, 90, 0)',
+            'text-align': 'left',
+            'font-size': '15px',
+            'color': 'rgba(255, 90, 90, 1)'
+          },
+          position: [lng, lat]
+        });
+
+        this.mapData.textR.setMap(this.mapData.map);
+      }
+    }
+  })
+</script>
+</body>
+</html>
